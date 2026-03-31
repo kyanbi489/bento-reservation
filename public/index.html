@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お弁当予約</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Helvetica Neue', sans-serif; background: #faf9f7; color: #333; }
+
+    header {
+      background: #2c2c2c;
+      color: white;
+      text-align: center;
+      padding: 32px 16px;
+    }
+    header h1 { font-size: 1.8rem; letter-spacing: 0.1em; }
+    header p { margin-top: 8px; color: #aaa; font-size: 0.9rem; }
+
+    .menu-section { max-width: 900px; margin: 48px auto; padding: 0 16px; }
+    .menu-section h2 { font-size: 1.2rem; margin-bottom: 24px; text-align: center; letter-spacing: 0.05em; }
+
+    .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+
+    .menu-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 2px solid transparent;
+    }
+    .menu-card:hover { transform: translateY(-4px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+    .menu-card.selected { border-color: #e67e22; }
+
+    .menu-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: #eee;
+    }
+    .menu-card .placeholder {
+      width: 100%;
+      height: 180px;
+      background: linear-gradient(135deg, #f5e6d3, #fad7a0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+    }
+    .menu-card-body { padding: 16px; }
+    .menu-card-body h3 { font-size: 1.1rem; }
+    .menu-card-body .price { color: #e67e22; font-size: 1.2rem; font-weight: bold; margin-top: 4px; }
+    .menu-card-body .desc { color: #777; font-size: 0.85rem; margin-top: 8px; line-height: 1.5; }
+    .menu-card-body .remaining { margin-top: 10px; font-size: 0.8rem; color: #999; }
+    .menu-card-body .remaining.low { color: #e74c3c; }
+
+    .form-section {
+      max-width: 560px;
+      margin: 0 auto 64px;
+      padding: 0 16px;
+    }
+    .form-section h2 { font-size: 1.2rem; margin-bottom: 24px; text-align: center; letter-spacing: 0.05em; }
+
+    .form-card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+
+    label { display: block; margin-top: 16px; font-size: 0.85rem; color: #555; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      margin-top: 6px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      background: #fafafa;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus { outline: none; border-color: #e67e22; background: white; }
+
+    .selected-menu-display {
+      margin-top: 16px;
+      padding: 12px;
+      background: #fff8f0;
+      border-radius: 8px;
+      border: 1px solid #fad7a0;
+      font-size: 0.9rem;
+      color: #c0392b;
+      display: none;
+    }
+
+    button[type="submit"] {
+      margin-top: 24px;
+      width: 100%;
+      padding: 14px;
+      background: #e67e22;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: background 0.2s;
+    }
+    button[type="submit"]:hover { background: #cf6d17; }
+
+    #message {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 8px;
+      text-align: center;
+      display: none;
+      font-size: 0.95rem;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+
+    footer { text-align: center; padding: 32px; color: #aaa; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🍱 お弁当予約</h1>
+  <p>ご注文はこちらからどうぞ</p>
+</header>
+
+<section class="menu-section">
+  <h2>— メニュー —</h2>
+  <div class="menu-grid" id="menu-grid"></div>
+</section>
+
+<section class="form-section">
+  <h2>— ご予約フォーム —</h2>
+  <div id="hours-banner" style="display:none; background:#fff3cd; color:#856404; padding:12px; border-radius:8px; text-align:center; margin-bottom:16px; font-size:0.9rem;">
+    現在は受付時間外です（受付時間：9:00〜14:00）
+  </div>
+  <div class="form-card">
+    <form id="form">
+      <div class="selected-menu-display" id="selected-display"></div>
+      <label>日付
+        <input type="date" id="date" required>
+      </label>
+      <label>数量
+        <input type="number" id="quantity" min="1" value="1" required>
+      </label>
+      <label>受取時間（9:00〜14:00）
+        <input type="time" id="pickup_time" min="09:00" max="14:00" required>
+      </label>
+      <label>お名前
+        <input type="text" id="name" placeholder="田中 太郎" required>
+      </label>
+      <label>電話番号
+        <input type="tel" id="phone" placeholder="090-1234-5678" required>
+      </label>
+      <label>メールアドレス
+        <input type="email" id="email" placeholder="example@mail.com" required>
+      </label>
+      <label>配達先住所
+        <input type="text" id="address" placeholder="東京都渋谷区〇〇1-2-3" required>
+      </label>
+      <button type="submit">予約する</button>
+    </form>
+    <div id="message"></div>
+  </div>
+</section>
+
+<footer>© お弁当予約システム</footer>
+
+<script>
+  let selectedMenuId = null;
+  let menus = [];
+
+  const dateInput = document.getElementById("date");
+  const today = new Date().toISOString().split("T")[0];
+  dateInput.value = today;
+  dateInput.min = today;
+
+  // 受付時間外の表示
+  function checkBusinessHours() {
+    const now = new Date();
+    const h = now.getHours();
+    const inHours = h >= 9 && h < 14;
+    const banner = document.getElementById("hours-banner");
+    if (!inHours) {
+      banner.style.display = "block";
+      document.querySelector("button[type='submit']").disabled = true;
+      document.querySelector("button[type='submit']").style.opacity = "0.5";
+    }
+  }
+  checkBusinessHours();
+
+  async function loadMenus() {
+    const date = dateInput.value;
+    const [menuRes, availRes] = await Promise.all([
+      fetch("/menus"),
+      fetch(`/availability?date=${date}`)
+    ]);
+    menus = await menuRes.json();
+    const avail = await availRes.json();
+
+    const grid = document.getElementById("menu-grid");
+    grid.innerHTML = menus.map(m => {
+      const a = avail.find(a => a.id === m.id);
+      const remaining = a ? a.remaining : 0;
+      const lowStock = remaining > 0 && remaining <= 5;
+      const soldOut = remaining === 0;
+      return `
+        <div class="menu-card ${selectedMenuId === m.id ? 'selected' : ''} ${soldOut ? 'soldout' : ''}"
+             onclick="${soldOut ? '' : `selectMenu(${m.id})`}" style="${soldOut ? 'opacity:0.5;cursor:not-allowed' : ''}">
+          <div class="placeholder">🍱</div>
+          <div class="menu-card-body">
+            <h3>${m.name}</h3>
+            <div class="price">¥${m.price.toLocaleString()}</div>
+            <div class="desc">${m.description || ""}</div>
+            <div class="remaining ${lowStock ? 'low' : ''}">
+              ${soldOut ? '売り切れ' : lowStock ? `残り${remaining}個` : `残り${remaining}個`}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function selectMenu(id) {
+    selectedMenuId = id;
+    const menu = menus.find(m => m.id === id);
+    const display = document.getElementById("selected-display");
+    display.style.display = "block";
+    display.textContent = `選択中：${menu.name}（¥${menu.price.toLocaleString()}）`;
+    loadMenus();
+  }
+
+  dateInput.addEventListener("change", loadMenus);
+  loadMenus();
+
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!selectedMenuId) {
+      const msg = document.getElementById("message");
+      msg.style.display = "block";
+      msg.className = "error";
+      msg.textContent = "メニューを選択してください";
+      return;
+    }
+    const body = {
+      name: document.getElementById("name").value,
+      phone: document.getElementById("phone").value,
+      email: document.getElementById("email").value,
+      address: document.getElementById("address").value,
+      menu_id: selectedMenuId,
+      quantity: Number(document.getElementById("quantity").value),
+      date: document.getElementById("date").value,
+      pickup_time: document.getElementById("pickup_time").value
+    };
+    const res = await fetch("/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const msg = document.getElementById("message");
+    msg.style.display = "block";
+    if (res.ok) {
+      const data = await res.json();
+      msg.className = "success";
+      msg.textContent = `ご予約ありがとうございます（予約番号：${data.id}）`;
+      document.getElementById("form").reset();
+      selectedMenuId = null;
+      document.getElementById("selected-display").style.display = "none";
+      dateInput.value = today;
+      loadMenus();
+    } else {
+      const data = await res.json();
+      msg.className = "error";
+      msg.textContent = `エラー：${data.error}`;
+    }
+  });
+</script>
+</body>
+</html>
