@@ -14,10 +14,18 @@ function getReserved(menu_id, date) {
   return row.total;
 }
 
+function toHalfWidth(str) {
+  return str.replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+            .replace(/　/g, ' ')
+            .replace(/＠/g, '@');
+}
+
 function validateReservation({ name, phone, email, address, menu_id, quantity, date, pickup_time }) {
   if (!name || typeof name !== "string") return "名前が無効です";
-  if (!phone || !/^[0-9\-+]{10,15}$/.test(phone)) return "電話番号が無効です";
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "メールアドレスが無効です";
+  if (!phone) return "電話番号が必要です";
+  if (!email) return "メールアドレスが必要です";
+  const halfEmail = toHalfWidth(email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(halfEmail)) return "メールアドレスが無効です";
   if (!address || typeof address !== "string") return "住所が無効です";
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "日付の形式が無効です (YYYY-MM-DD)";
   if (!pickup_time) return "受取時間が必要です";
