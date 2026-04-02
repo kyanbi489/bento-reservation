@@ -27,9 +27,11 @@ function validateReservation({ name, phone, email, address, menu_id, quantity, d
   if (minutes < 9 * 60 || minutes > 14 * 60) return "受取時間は9:00〜14:00の間で指定してください";
   if (!Number.isInteger(quantity) || quantity < 1) return "数量は1以上の整数で指定してください";
   if (!db.prepare("SELECT id FROM menus WHERE id = ?").get(menu_id)) return "メニューが存在しません";
-  // 受付時間は9:00〜14:00
+  // 受付時間は9:00〜14:00（日本時間）
   const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const jstHour = (now.getUTCHours() + 9) % 24;
+  const jstMinute = now.getUTCMinutes();
+  const nowMinutes = jstHour * 60 + jstMinute;
   if (nowMinutes < 9 * 60 || nowMinutes > 14 * 60) return "予約受付時間は9:00〜14:00です";
   return null;
 }
