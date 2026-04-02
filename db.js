@@ -17,11 +17,17 @@ db.exec(`
     phone TEXT NOT NULL,
     email TEXT NOT NULL,
     address TEXT NOT NULL,
-    menu_id INTEGER NOT NULL,
-    quantity INTEGER NOT NULL,
     date TEXT NOT NULL,
     pickup_time TEXT NOT NULL,
-    completed INTEGER NOT NULL DEFAULT 0,
+    completed INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS reservation_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reservation_id INTEGER NOT NULL,
+    menu_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    FOREIGN KEY (reservation_id) REFERENCES reservations(id),
     FOREIGN KEY (menu_id) REFERENCES menus(id)
   );
 `);

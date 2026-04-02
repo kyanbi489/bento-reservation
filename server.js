@@ -9,7 +9,7 @@ app.use(express.static("public"));
 
 function getReserved(menu_id, date) {
   const row = db.prepare(
-    "SELECT COALESCE(SUM(quantity), 0) as total FROM reservations WHERE menu_id = ? AND date = ?"
+    "SELECT COALESCE(SUM(ri.quantity), 0) as total FROM reservation_items ri JOIN reservations r ON ri.reservation_id = r.id WHERE ri.menu_id = ? AND r.date = ?"
   ).get(menu_id, date);
   return row.total;
 }
@@ -20,31 +20,7 @@ function toHalfWidth(str) {
             .replace(/＠/g, '@');
 }
 
-function validateReservation({ name, phone, email, address, menu_id, quantity, date, pickup_time }) {
-  if (!name || typeof name !== "string") return "名前が無効です";
-  if (!phone) return "電話番号が必要です";
-  if (!email) return "メールアドレスが必要です";
-  const halfEmail = toHalfWidth(email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(halfEmail)) return "メールアドレスが無効です";
-  if (!address || typeof address !== "string") return "住所が無効です";
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "日付の形式が無効です (YYYY-MM-DD)";
-  if (!pickup_time) return "受取時間が必要です";
-  // 受取時間は9:00〜14:00
-  const [h, m] = pickup_time.split(":").map(Number);
-  const minutes = h * 60 + m;
-  if (minutes < 9 * 60 || minutes > 14 * 60) return "受取時間は9:00〜14:00の間で指定してください";
-  if (!Number.isInteger(quantity) || quantity < 1) return "数量は1以上の整数で指定してください";
-  if (!db.prepare("SELECT id FROM menus WHERE id = ?").get(menu_id)) return "メニューが存在しません";
-  // 受付時間は9:00〜14:00（日本時間）
-  const now = new Date();
-  const jstHour = (now.getUTCHours() + 9) % 24;
-  const jstMinute = now.getUTCMinutes();
-  const nowMinutes = jstHour * 60 + jstMinute;
-  if (nowMinutes < 9 * 60 || nowMinutes > 14 * 60) return "予約受付時間は9:00〜14:00です";
-  return null;
-}
-
-// メニュー一覧（写真・値段・説明つき）
+// メニュー一覧
 app.get("/menus", (req, res) => {
   res.json(db.prepare("SELECT * FROM menus").all());
 });
@@ -65,20 +41,49 @@ app.get("/availability", (req, res) => {
 
 // 予約作成
 app.post("/reservations", (req, res) => {
-  const { name, phone, email, address, menu_id, quantity, date, pickup_time } = req.body;
-  const error = validateReservation({ name, phone, email, address, menu_id, quantity, date, pickup_time });
-  if (error) return res.status(400).json({ error });
+  const { name, phone, email, address, date, pickup_time, items } = req.body;
 
-  const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(menu_id);
-  if (getReserved(menu_id, date) + quantity > menu.max) {
-    return res.status(409).json({ error: "売り切れ" });
+  if (!name) return res.status(400).json({ error: "名前が必要です" });
+  if (!phone) return res.status(400).json({ error: "電話番号が必要です" });
+  if (!email) return res.status(400).json({ error: "メールアドレスが必要です" });
+  const halfEmail = toHalfWidth(email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(halfEmail)) return res.status(400).json({ error: "メールアドレスが無効です" });
+  if (!address) return res.status(400).json({ error: "住所が必要です" });
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "日付の形式が無効です" });
+  if (!pickup_time) return res.status(400).json({ error: "受取時間が必要です" });
+  const [h, m] = pickup_time.split(":").map(Number);
+  if (h * 60 + m < 9 * 60 || h * 60 + m > 14 * 60) return res.status(400).json({ error: "受取時間は9:00〜14:00の間で指定してください" });
+  if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "メニューを選択してください" });
+
+  // 受付時間チェック（日本時間）
+  const now = new Date();
+  const jstHour = (now.getUTCHours() + 9) % 24;
+  const jstMinute = now.getUTCMinutes();
+  if (jstHour * 60 + jstMinute < 9 * 60 || jstHour * 60 + jstMinute > 14 * 60) {
+    return res.status(400).json({ error: "予約受付時間は9:00〜14:00です" });
+  }
+
+  // 在庫チェック
+  for (const item of items) {
+    const menu = db.prepare("SELECT * FROM menus WHERE id = ?").get(item.menu_id);
+    if (!menu) return res.status(400).json({ error: "メニューが存在しません" });
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) return res.status(400).json({ error: "数量は1以上の整数で指定してください" });
+    if (getReserved(item.menu_id, date) + item.quantity > menu.max) {
+      return res.status(409).json({ error: `${menu.name}が売り切れです` });
+    }
   }
 
   const result = db.prepare(
-    "INSERT INTO reservations (name, phone, email, address, menu_id, quantity, date, pickup_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(name, phone, email, address, menu_id, quantity, date, pickup_time);
+    "INSERT INTO reservations (name, phone, email, address, date, pickup_time) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(name, phone, halfEmail, address, date, pickup_time);
 
-  res.status(201).json({ id: result.lastInsertRowid, name, phone, email, address, menu_id, quantity, date, pickup_time });
+  const reservationId = result.lastInsertRowid;
+  for (const item of items) {
+    db.prepare("INSERT INTO reservation_items (reservation_id, menu_id, quantity) VALUES (?, ?, ?)")
+      .run(reservationId, item.menu_id, item.quantity);
+  }
+
+  res.status(201).json({ id: reservationId });
 });
 
 // 予約一覧（管理用）
@@ -86,19 +91,18 @@ app.get("/reservations", (req, res) => {
   const { date } = req.query;
   let rows;
   if (date) {
-    rows = db.prepare(`
-      SELECT r.*, m.name as menu_name FROM reservations r
-      JOIN menus m ON r.menu_id = m.id
-      WHERE r.date = ? ORDER BY r.pickup_time
-    `).all(date);
+    rows = db.prepare("SELECT * FROM reservations WHERE date = ? ORDER BY pickup_time").all(date);
   } else {
-    rows = db.prepare(`
-      SELECT r.*, m.name as menu_name FROM reservations r
-      JOIN menus m ON r.menu_id = m.id
-      ORDER BY r.date, r.pickup_time
-    `).all();
+    rows = db.prepare("SELECT * FROM reservations ORDER BY date, pickup_time").all();
   }
-  res.json(rows);
+  const result = rows.map(r => {
+    const items = db.prepare(`
+      SELECT ri.quantity, m.name as menu_name, m.price FROM reservation_items ri
+      JOIN menus m ON ri.menu_id = m.id WHERE ri.reservation_id = ?
+    `).all(r.id);
+    return { ...r, items };
+  });
+  res.json(result);
 });
 
 // 予約キャンセル
@@ -106,6 +110,7 @@ app.delete("/reservations/:id", (req, res) => {
   const id = Number(req.params.id);
   const row = db.prepare("SELECT id FROM reservations WHERE id = ?").get(id);
   if (!row) return res.status(404).json({ error: "予約が見つかりません" });
+  db.prepare("DELETE FROM reservation_items WHERE reservation_id = ?").run(id);
   db.prepare("DELETE FROM reservations WHERE id = ?").run(id);
   res.json({ message: "削除OK" });
 });
