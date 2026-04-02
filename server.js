@@ -110,4 +110,14 @@ app.delete("/reservations/:id", (req, res) => {
   res.json({ message: "削除OK" });
 });
 
+// 完了フラグ切り替え
+app.patch("/reservations/:id/complete", (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare("SELECT id, completed FROM reservations WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ error: "予約が見つかりません" });
+  const newStatus = row.completed ? 0 : 1;
+  db.prepare("UPDATE reservations SET completed = ? WHERE id = ?").run(newStatus, id);
+  res.json({ completed: newStatus });
+});
+
 app.listen(3000, () => console.log("起動中 http://localhost:3000"));

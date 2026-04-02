@@ -21,6 +21,7 @@ db.exec(`
     quantity INTEGER NOT NULL,
     date TEXT NOT NULL,
     pickup_time TEXT NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (menu_id) REFERENCES menus(id)
   );
 `);
