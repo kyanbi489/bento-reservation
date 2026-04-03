@@ -105,7 +105,33 @@ app.get("/reservations", (req, res) => {
   res.json(result);
 });
 
-// 予約キャンセル
+// メニュー更新
+app.put("/menus/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const { name, price, description, max } = req.body;
+  if (!name || !price || !max) return res.status(400).json({ error: "必須項目が不足しています" });
+  const row = db.prepare("SELECT id FROM menus WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ error: "メニューが見つかりません" });
+  db.prepare("UPDATE menus SET name = ?, price = ?, description = ?, max = ? WHERE id = ?")
+    .run(name, Number(price), description || "", Number(max), id);
+  res.json({ message: "更新OK" });
+});
+
+// メニュー追加
+app.post("/menus", (req, res) => {
+  const { name, price, description, max } = req.body;
+  if (!name || !price || !max) return res.status(400).json({ error: "必須項目が不足しています" });
+  const result = db.prepare("INSERT INTO menus (name, price, description, image, max) VALUES (?, ?, ?, ?, ?)")
+    .run(name, Number(price), description || "", "", Number(max));
+  res.status(201).json({ id: result.lastInsertRowid });
+});
+
+// メニュー削除
+app.delete("/menus/:id", (req, res) => {
+  const id = Number(req.params.id);
+  db.prepare("DELETE FROM menus WHERE id = ?").run(id);
+  res.json({ message: "削除OK" });
+});
 app.delete("/reservations/:id", (req, res) => {
   const id = Number(req.params.id);
   const row = db.prepare("SELECT id FROM reservations WHERE id = ?").get(id);

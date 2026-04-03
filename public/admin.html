@@ -12,6 +12,8 @@
     button.clear { padding: 8px 12px; background: #aaa; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.pdf { padding: 8px 12px; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.pdf:hover { background: #1a252f; }
+    button.menu-toggle { padding: 8px 12px; background: #e67e22; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button.menu-toggle:hover { background: #cf6d17; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th { background: #f0f0f0; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
     td { padding: 10px; border-bottom: 1px solid #eee; }
@@ -46,6 +48,31 @@
     <input type="date" id="date">
     <button class="clear" onclick="clearFilter()">全件表示</button>
     <button class="pdf" onclick="window.print()">PDF出力</button>
+    <button class="menu-toggle" onclick="toggleMenuSection()">メニュー管理</button>
+  </div>
+
+  <div id="menu-section" style="display:none; margin-bottom:24px; padding:16px; background:#f9f9f9; border-radius:8px;">
+    <h2 style="font-size:1rem; margin-bottom:12px;">メニュー管理</h2>
+    <table id="menu-table" style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:16px;">
+      <thead>
+        <tr>
+          <th style="padding:8px; background:#f0f0f0; border-bottom:2px solid #ddd;">名前</th>
+          <th style="padding:8px; background:#f0f0f0; border-bottom:2px solid #ddd;">値段</th>
+          <th style="padding:8px; background:#f0f0f0; border-bottom:2px solid #ddd;">説明</th>
+          <th style="padding:8px; background:#f0f0f0; border-bottom:2px solid #ddd;">上限数</th>
+          <th style="padding:8px; background:#f0f0f0; border-bottom:2px solid #ddd;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="menu-tbody"></tbody>
+    </table>
+    <h3 style="font-size:0.95rem; margin-bottom:8px;">新しいメニューを追加</h3>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="text" id="new-name" placeholder="メニュー名" style="padding:6px; border:1px solid #ccc; border-radius:4px;">
+      <input type="number" id="new-price" placeholder="値段" style="padding:6px; border:1px solid #ccc; border-radius:4px; width:80px;">
+      <input type="text" id="new-desc" placeholder="説明" style="padding:6px; border:1px solid #ccc; border-radius:4px; flex:1;">
+      <input type="number" id="new-max" placeholder="上限数" style="padding:6px; border:1px solid #ccc; border-radius:4px; width:80px;">
+      <button onclick="addMenu()" style="padding:6px 12px; background:#e67e22; color:white; border:none; border-radius:4px; cursor:pointer;">追加</button>
+    </div>
   </div>
   <div id="count"></div>
   <table>
@@ -105,6 +132,67 @@
     function clearFilter() {
       dateInput.value = "";
       load();
+    }
+
+    function toggleMenuSection() {
+      const s = document.getElementById("menu-section");
+      s.style.display = s.style.display === "none" ? "block" : "none";
+      if (s.style.display === "block") loadMenus();
+    }
+
+    async function loadMenus() {
+      const res = await fetch("/menus");
+      const menus = await res.json();
+      document.getElementById("menu-tbody").innerHTML = menus.map(function(m) {
+        return "<tr>" +
+          "<td><input value='" + m.name + "' id='m-name-" + m.id + "' style='width:100%;padding:4px;border:1px solid #ddd;border-radius:4px;'></td>" +
+          "<td><input type='number' value='" + m.price + "' id='m-price-" + m.id + "' style='width:70px;padding:4px;border:1px solid #ddd;border-radius:4px;'></td>" +
+          "<td><input value='" + (m.description || "") + "' id='m-desc-" + m.id + "' style='width:100%;padding:4px;border:1px solid #ddd;border-radius:4px;'></td>" +
+          "<td><input type='number' value='" + m.max + "' id='m-max-" + m.id + "' style='width:60px;padding:4px;border:1px solid #ddd;border-radius:4px;'></td>" +
+          "<td style='white-space:nowrap'>" +
+          "<button onclick='updateMenu(" + m.id + ")' style='padding:4px 8px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:4px;'>保存</button>" +
+          "<button onclick='deleteMenu(" + m.id + ")' style='padding:4px 8px;background:#e74c3c;color:white;border:none;border-radius:4px;cursor:pointer;'>削除</button>" +
+          "</td></tr>";
+      }).join("");
+    }
+
+    async function updateMenu(id) {
+      await fetch("/menus/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: document.getElementById("m-name-" + id).value,
+          price: document.getElementById("m-price-" + id).value,
+          description: document.getElementById("m-desc-" + id).value,
+          max: document.getElementById("m-max-" + id).value
+        })
+      });
+      alert("保存しました");
+      loadMenus();
+    }
+
+    async function deleteMenu(id) {
+      if (!confirm("このメニューを削除しますか？")) return;
+      await fetch("/menus/" + id, { method: "DELETE" });
+      loadMenus();
+    }
+
+    async function addMenu() {
+      const name = document.getElementById("new-name").value;
+      const price = document.getElementById("new-price").value;
+      const desc = document.getElementById("new-desc").value;
+      const max = document.getElementById("new-max").value;
+      if (!name || !price || !max) { alert("名前・値段・上限数は必須です"); return; }
+      await fetch("/menus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, price, description: desc, max })
+      });
+      document.getElementById("new-name").value = "";
+      document.getElementById("new-price").value = "";
+      document.getElementById("new-desc").value = "";
+      document.getElementById("new-max").value = "";
+      loadMenus();
     }
 
     load().then(() => {
