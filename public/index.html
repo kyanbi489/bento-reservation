@@ -40,9 +40,23 @@
     .success { background: #d4edda; color: #155724; }
     .error { background: #f8d7da; color: #721c24; }
     footer { text-align: center; padding: 32px; color: #aaa; font-size: 0.8rem; }
+
+    #loading {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #2c2c2c; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 9999;
+      transition: opacity 0.5s;
+    }
+    #loading .logo { color: #f0a500; font-size: 3rem; margin-bottom: 16px; }
+    #loading p { color: #aaa; font-size: 0.9rem; letter-spacing: 0.1em; }
   </style>
 </head>
 <body>
+
+<div id="loading">
+  <div class="logo">🍱</div>
+  <p>IRODORI BENTO</p>
+</div>
 
 <header>
   <div style="font-size:0.85rem; color:#f0a500; letter-spacing:0.1em; margin-bottom:8px;">🍱 IRODORI BENTO</div>
@@ -167,7 +181,11 @@
   }
 
   dateInput.addEventListener("change", loadMenus);
-  loadMenus();
+  loadMenus().then(() => {
+    const loading = document.getElementById("loading");
+    loading.style.opacity = "0";
+    setTimeout(() => loading.style.display = "none", 500);
+  });
 
   document.getElementById("form").addEventListener("submit", async (e) => {
     e.preventDefault();
