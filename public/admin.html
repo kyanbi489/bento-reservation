@@ -3,14 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>予約管理</title>
+  <title>予約管理 | IRODORI弁当</title>
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 16px; }
+    body { font-family: sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 16px; }
     h1 { font-size: 1.4rem; }
     .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
     input[type="date"] { padding: 8px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
     button.clear { padding: 8px 12px; background: #aaa; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    button.pdf { padding: 8px 12px; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button.pdf:hover { background: #1a252f; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th { background: #f0f0f0; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
     td { padding: 10px; border-bottom: 1px solid #eee; }
     button.cancel { padding: 4px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; }
@@ -20,18 +22,27 @@
     button.completed { padding: 4px 10px; background: #aaa; color: white; border: none; border-radius: 4px; cursor: pointer; }
     tr.done td { opacity: 0.5; }
     #count { margin-bottom: 12px; color: #555; font-size: 0.9rem; }
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; }
+    }
   </style>
 </head>
 <body>
   <h1>予約管理</h1>
-  <div class="filters">
+  <div class="filters no-print">
     <input type="date" id="date">
     <button class="clear" onclick="clearFilter()">全件表示</button>
+    <button class="pdf" onclick="window.print()">PDF出力</button>
   </div>
   <div id="count"></div>
   <table>
     <thead>
-      <tr><th>番号</th><th>日付</th><th>受取時間</th><th>名前</th><th>電話番号</th><th>メール</th><th>住所</th><th>メニュー</th><th>数量</th><th>完了</th><th>操作</th></tr>
+      <tr>
+        <th>番号</th><th>日付</th><th>受取時間</th><th>名前</th>
+        <th>電話番号</th><th>メール</th><th>住所</th>
+        <th>注文内容</th><th>合計</th><th>完了</th><th class="no-print">操作</th>
+      </tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
@@ -44,30 +55,38 @@
 
     async function load() {
       const date = dateInput.value;
-      const url = date ? `/reservations?date=${date}` : "/reservations";
+      const url = date ? "/reservations?date=" + date : "/reservations";
       const res = await fetch(url);
       const rows = await res.json();
       const tbody = document.getElementById("tbody");
-      document.getElementById("count").textContent = `${rows.length} 件`;
-      tbody.innerHTML = rows.map(r => `
-        <tr>
-          <td>${r.id}</td>
-          <td>${r.date}</td>
-          <td>${r.pickup_time}</td>
-          <td>${r.name}</td>
-          <td>${r.phone}</td>
-          <td>${r.email}</td>
-          <td>${r.address}</td>
-          <td>${r.menu_name}</td>
-          <td>${r.quantity}</td>
-          <td><button class="cancel" onclick="cancel(${r.id})">キャンセル</button></td>
-        </tr>
-      `).join("");
+      document.getElementById("count").textContent = rows.length + " 件";
+      tbody.innerHTML = rows.map(function(r) {
+        const itemsText = r.items.map(function(i) { return i.menu_name + "×" + i.quantity; }).join("、");
+        const total = r.items.reduce(function(sum, i) { return sum + i.price * i.quantity; }, 0);
+        return "<tr class='" + (r.completed ? "done" : "") + "'>" +
+          "<td>" + r.id + "</td>" +
+          "<td>" + r.date + "</td>" +
+          "<td>" + r.pickup_time + "</td>" +
+          "<td>" + r.name + "</td>" +
+          "<td>" + r.phone + "</td>" +
+          "<td>" + r.email + "</td>" +
+          "<td>" + r.address + "</td>" +
+          "<td>" + itemsText + "</td>" +
+          "<td>¥" + total.toLocaleString() + "</td>" +
+          "<td><button class='" + (r.completed ? "completed" : "complete") + "' onclick='toggleComplete(" + r.id + ")'>" + (r.completed ? "完了済" : "完了") + "</button></td>" +
+          "<td class='no-print'><button class='cancel' onclick='cancel(" + r.id + ")'>キャンセル</button></td>" +
+          "</tr>";
+      }).join("");
     }
 
     async function cancel(id) {
-      if (!confirm(`予約番号 ${id} をキャンセルしますか？`)) return;
-      await fetch(`/reservations/${id}`, { method: "DELETE" });
+      if (!confirm("予約番号 " + id + " をキャンセルしますか？")) return;
+      await fetch("/reservations/" + id, { method: "DELETE" });
+      load();
+    }
+
+    async function toggleComplete(id) {
+      await fetch("/reservations/" + id + "/complete", { method: "PATCH" });
       load();
     }
 
